@@ -17,7 +17,8 @@ INSTALLED_APPS = [
     "corsheaders",
     "resume_pipeline",
     'feedback',
-    'attrition'   
+    'attrition',
+    'accounts'  
 ]
 
 MIDDLEWARE = [
@@ -75,3 +76,51 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LANGUAGE_CODE = "en-us"
 TIME_ZONE     = "UTC"
 USE_TZ        = True
+
+from datetime import timedelta
+
+# --- Custom user model ---
+AUTH_USER_MODEL = "accounts.User"
+
+# --- Installed apps (add these) ---
+INSTALLED_APPS = [
+    # ... your existing apps ...
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",  # enables logout blacklisting
+    "corsheaders",
+    "accounts",
+]
+
+MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",  # must be first
+    # ... rest of your middleware ...
+]
+
+# --- DRF default auth ---
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+}
+
+# --- JWT configuration ---
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME":  timedelta(minutes=30),   # short-lived
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),        # refreshed silently
+    "ROTATE_REFRESH_TOKENS":  True,   # new refresh token on every refresh call
+    "BLACKLIST_AFTER_ROTATION": True, # old refresh token blacklisted on rotate
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.CustomTokenObtainPairSerializer",
+}
+
+# --- CORS (React dev server) ---
+# In production replace with your actual frontend domain
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",   # Vite dev server
+    "http://localhost:3000",   # CRA dev server
+]
+CORS_ALLOW_CREDENTIALS = True

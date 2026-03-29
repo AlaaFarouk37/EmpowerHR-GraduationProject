@@ -3,6 +3,8 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView
+from accounts.permissions import IsHRManager, IsCandidate
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from .models import Job, Submission
 from .serializers import JobSerializer, SubmissionSerializer, SubmissionUploadSerializer
@@ -13,7 +15,9 @@ logger = logging.getLogger(__name__)
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
 
+
 class JobListCreateView(ListCreateAPIView):
+    
     queryset         = Job.objects.filter(is_active=True).order_by("-created_at")
     serializer_class = JobSerializer
 
@@ -22,15 +26,21 @@ class JobListCreateView(ListCreateAPIView):
         description = serializer.validated_data.get("description", "")
         required_skills = extract_skills(description)
         serializer.save(required_skills=required_skills)
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsHRManager()] 
 
 
 class JobDetailView(RetrieveUpdateAPIView):
+    permission_classes = [IsHRManager]
     queryset         = Job.objects.all()
     serializer_class = JobSerializer
 
 
 class JobWeightsView(APIView):
     """PATCH /api/jobs/{id}/weights/ — update only the four weights."""
+    permission_classes = [IsHRManager]
 
     def patch(self, request, pk):
         try:
@@ -63,7 +73,7 @@ class SubmitResumeView(APIView):
     Accepts multipart/form-data with: job, candidate_name, candidate_email, resume_file
     Runs the full pipeline synchronously and returns results.
     """
-
+    permission_classes = [IsCandidate]
     def post(self, request):
         serializer = SubmissionUploadSerializer(data=request.data)
         if not serializer.is_valid():
@@ -87,7 +97,7 @@ class SubmitResumeView(APIView):
 
 class JobSubmissionsView(APIView):
     """GET /api/jobs/{id}/submissions/ — all results for a job, ranked by ATS score."""
-
+    permission_classes = [IsHRManager]
     def get(self, request, pk):
         submissions = (
             Submission.objects
@@ -99,7 +109,7 @@ class JobSubmissionsView(APIView):
 
 class SubmissionDetailView(APIView):
     """GET /api/submissions/{id}/"""
-
+    permission_classes = [IsHRManager]
     def get(self, request, pk):
         try:
             sub = Submission.objects.get(pk=pk)

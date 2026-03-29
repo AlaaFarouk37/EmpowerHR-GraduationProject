@@ -1,16 +1,26 @@
+
 const BASE = 'http://127.0.0.1:8000/api';
 
+const authHeaders = () => {
+  const token = localStorage.getItem('access');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
+
 export const api = {
-  get:    (url)       => fetch(`${BASE}${url}`).then(r => r.json()),
-  post:   (url, data) => fetch(`${BASE}${url}`, { method: 'POST',   headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()),
-  put:    (url, data) => fetch(`${BASE}${url}`, { method: 'PUT',    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()),
-  delete: (url)       => fetch(`${BASE}${url}`, { method: 'DELETE' }),
+  get:    (url)       => fetch(`${BASE}${url}`, { headers: authHeaders() }).then(r => r.json()),
+  post:   (url, data) => fetch(`${BASE}${url}`, { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) }).then(r => r.json()),
+  put:    (url, data) => fetch(`${BASE}${url}`, { method: 'PUT',    headers: authHeaders(), body: JSON.stringify(data) }).then(r => r.json()),
+  delete: (url)       => fetch(`${BASE}${url}`, { method: 'DELETE', headers: authHeaders() }),
 };
 
 // Employee
 export const getForms        = (employeeID) => api.get(`/feedback/forms/?employee_id=${employeeID}`);
 export const getFormDetail   = (formID, employeeID) => api.get(`/feedback/forms/${formID}/?employee_id=${employeeID}`);
 export const submitFeedback  = (formID, data) => api.post(`/feedback/forms/${formID}/submit/`, data);
+//cd export const changePassword = (data) => api.post('/auth/change-password/', data);
 
 // HR Manager -- Forms
 export const hrGetForms      = ()          => api.get('/feedback/hr/forms/');
@@ -32,3 +42,11 @@ export const hrGetSubmissions  = (formID) => api.get(`/feedback/hr/submissions/$
 // Attrition
 export const runPrediction     = (formID)  => api.post('/attrition/run/', formID ? { form_id: formID } : {});
 export const getPredictions    = ()        => api.get('/attrition/predictions/latest/');
+
+// Auth
+export const loginUser           = (data) => api.post('/auth/login/', data);
+export const logoutUser          = (refresh) => api.post('/auth/logout/', { refresh });
+export const refreshToken        = (refresh) => api.post('/auth/token/refresh/', { refresh });
+export const getMe               = () => api.get('/auth/me/');
+export const registerCandidate   = (data) => api.post('/auth/candidate/register/', data);
+export const changePassword      = (data) => api.post('/auth/change-password/', data);
