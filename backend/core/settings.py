@@ -13,12 +13,14 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "rest_framework",
     "corsheaders",
     "resume_pipeline",
     'feedback',
     'attrition',
-    'accounts'  
+    'accounts',
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",  
 ]
 
 MIDDLEWARE = [
@@ -81,21 +83,6 @@ from datetime import timedelta
 
 # --- Custom user model ---
 AUTH_USER_MODEL = "accounts.User"
-
-# --- Installed apps (add these) ---
-INSTALLED_APPS = [
-    # ... your existing apps ...
-    "rest_framework",
-    "rest_framework_simplejwt",
-    "rest_framework_simplejwt.token_blacklist",  # enables logout blacklisting
-    "corsheaders",
-    "accounts",
-]
-
-MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",  # must be first
-    # ... rest of your middleware ...
-]
 
 # --- DRF default auth ---
 REST_FRAMEWORK = {
