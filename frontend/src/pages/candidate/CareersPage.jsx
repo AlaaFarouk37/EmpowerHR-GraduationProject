@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Spinner, Modal, Btn, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { getJobPostings, submitResume } from '../../api/index.js';
-// ... (imports remain the same)
 
 export function EmployeeCareersPage() {
   const { user } = useAuth();
@@ -18,7 +17,7 @@ export function EmployeeCareersPage() {
   const [file, setFile]           = useState(null);
   const [submitting, setSubmitting] = useState(false);
   
-  // Track applied jobs locally to update the UI instantly
+  // Track applied jobs locally
   const [submittedJobs, setSubmittedJobs] = useState([]);
 
   useEffect(() => {
@@ -26,6 +25,13 @@ export function EmployeeCareersPage() {
       .then(data => { 
         const activeJobs = Array.isArray(data) ? data.filter(j => j.is_active !== false) : [];
         setJobs(activeJobs); 
+        
+        // SYNC PERSISTENT STATE: 
+        // Extract IDs where has_applied is true from the backend
+        const alreadyApplied = activeJobs
+          .filter(j => j.has_applied === true)
+          .map(j => j.id);
+        setSubmittedJobs(alreadyApplied);
       })
       .catch(() => toast('Could not reach API', 'error'))
       .finally(() => setLoading(false));
@@ -36,7 +42,6 @@ export function EmployeeCareersPage() {
       toast('Please sign in as a candidate to apply', 'info');
       return;
     }
-    // Prevent opening modal if already applied
     if (submittedJobs.includes(job.id)) return;
 
     setSelected(job);
@@ -52,7 +57,6 @@ export function EmployeeCareersPage() {
     if (!file) { toast('Please upload your resume', 'error'); return; }
     
     setSubmitting(true);
-    
     const fd = new FormData();
     fd.append('job', selected.id);
     fd.append('resume_file', file);
@@ -60,10 +64,13 @@ export function EmployeeCareersPage() {
     fd.append('candidate_email', email);
 
     try {
-      await submitResume(fd);
+      const res = await submitResume(fd);
       
-      // Success: mark as applied locally and close modal
-      setSubmittedJobs([...submittedJobs, selected.id]);
+      // Handle the case where the backend might send a custom debug error
+      if (res.debug_error) throw new Error(res.debug_error);
+
+      // Success: mark as applied locally
+      setSubmittedJobs(prev => [...prev, selected.id]);
       toast('Application submitted successfully!', 'success');
       handleCloseModal(); 
     } catch (e) { 
@@ -75,8 +82,6 @@ export function EmployeeCareersPage() {
 
   return (
     <div style={{ background: 'var(--gray-25)', minHeight: '100vh' }}>
-      {/* ... Hero Section remains the same ... */}
-
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 32px', display: 'grid', gridTemplateColumns: '1fr 360px', gap: 32, alignItems: 'start' }}>
         
         {/* Job List */}
@@ -96,7 +101,7 @@ export function EmployeeCareersPage() {
                       background: 'var(--white)', padding: 24, borderRadius: 20, cursor: 'pointer',
                       border: `2px solid ${selected?.id === j.id ? 'var(--red)' : 'transparent'}`,
                       boxShadow: '0 2px 8px rgba(0,0,0,0.04)', transition: '0.2s',
-                      opacity: isApplied ? 0.7 : 1
+                      opacity: isApplied ? 0.8 : 1 // Slightly dim applied jobs
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -111,7 +116,7 @@ export function EmployeeCareersPage() {
                         disabled={isApplied}
                         onClick={(e) => { e.stopPropagation(); handleApplyClick(j); }}
                       >
-                        {isApplied ? "Applied" : "Apply Now"}
+                        {isApplied ? "Already Applied" : "Apply Now"}
                       </Btn>
                     </div>
                   </div>
@@ -138,7 +143,7 @@ export function EmployeeCareersPage() {
         </aside>
       </div>
 
-      {/* Simplified Modal - No results displayed */}
+      {/* Modal */}
       <Modal open={showApply} onClose={handleCloseModal} title={`Apply for ${selected?.title}`} maxWidth={400}>
         <div 
           onClick={() => document.getElementById('resume-upload').click()}

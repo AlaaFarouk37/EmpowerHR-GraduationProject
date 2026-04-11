@@ -31,12 +31,20 @@ class Job(models.Model):
 class Submission(models.Model):
     """A candidate resume submitted against a Job."""
 
-    class Status(models.TextChoices):
-        PENDING    = "pending",    "Pending"
-        SHORTLISTED = 'shortlisted', 'Shortlisted'
-        IN_PROGRESS = 'in-progress', 'In-Progress'
-        REJECTED = 'rejected', 'Rejected'
-        APPROVED = 'approved', 'Approved'
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('shortlisted', 'Shortlisted'),
+        ('in-progress', 'In-Progress'),
+        ('rejected', 'Rejected'),
+        ('approved', 'Approved'),
+    ]
+
+    constraints = [
+            models.UniqueConstraint(
+                fields=['candidate_id', 'job'], 
+                name='unique_application'
+            )
+    ]
 
     job             = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="submissions")
     candidate_id = models.ForeignKey(
@@ -47,9 +55,7 @@ class Submission(models.Model):
     candidate_name  = models.CharField(max_length=255, blank=True)
     candidate_email = models.EmailField(blank=True)
     resume_file     = models.FileField(upload_to="resumes/")
-    status          = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
-    error_message   = models.TextField(blank=True)
-
+    status = models.CharField(choices=STATUS_CHOICES, default='pending', max_length=20)  
     # ── Extracted fields ──────────────────────────────────────────────────────
     raw_text               = models.TextField(blank=True)
     candidate_skills       = models.JSONField(default=list)

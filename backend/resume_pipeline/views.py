@@ -1,4 +1,5 @@
 import logging
+from urllib import request
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -71,40 +72,35 @@ class SubmitResumeView(APIView):
     permission_classes = [IsCandidate]
     def post(self, request):
         serializer = SubmissionUploadSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        submission = serializer.save(status=Submission.Status.PENDING, candidate_id=request.user)
-
-        try:
-            run_pipeline(submission)
-            submission.refresh_from_db()
-            return Response(
-                SubmissionSerializer(submission).data,
-                status=status.HTTP_201_CREATED,
-            )
-        except Exception as exc:
-            return Response(
-                {"detail": f"Pipeline failed: {str(exc)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
+        if serializer.is_valid():
+            try:
+            # Line 77
+                submission = serializer.save(status='PENDING', candidate_id=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            except Exception as e:
+            # This will send the EXACT error message to your React console
+                return Response({"debug_error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CandidateJobListView(APIView):
-    """
-    GET /api/resume_pipeline/jobs/
-    — Candidate endpoint to see available openings.
-    """
-    # Use IsAuthenticated so we know who is applying, 
-    # or AllowAny if you want the job board to be public.
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # We only want to show jobs that are active
         jobs = Job.objects.filter(is_active=True).order_by('-created_at')
+        
+        # 1. Get a list of all Job IDs this specific user has already applied for
+        user_submissions = Submission.objects.filter(candidate_id=request.user).values_list('job_id', flat=True)
+        
         serializer = CandidateJobSerializer(jobs, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        data = serializer.data
+
+        # 2. Manually inject the flag into the response data
+        for job_data in data:
+            job_data['has_applied'] = job_data['id'] in user_submissions
+            
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class JobSubmissionsView(APIView):

@@ -1,4 +1,6 @@
 
+import axios from 'axios';
+
 const BASE = 'http://127.0.0.1:8000/api';
 
 const authHeaders = () => {
@@ -14,6 +16,7 @@ export const api = {
   post:   (url, data) => fetch(`${BASE}${url}`, { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) }).then(r => r.json()),
   put:    (url, data) => fetch(`${BASE}${url}`, { method: 'PUT',    headers: authHeaders(), body: JSON.stringify(data) }).then(r => r.json()),
   delete: (url)       => fetch(`${BASE}${url}`, { method: 'DELETE', headers: authHeaders() }),
+  patch:  (url, data) => fetch(`${BASE}${url}`, { method: 'PATCH',  headers: authHeaders(), body: JSON.stringify(data) }).then(r => r.json()),
 };
 
 // Auth
@@ -58,24 +61,28 @@ export const hrCreateJob      = (data) => api.post('/resume_pipeline/jobs/', dat
 export const hrUpdateJob      = (id, data) => api.put(`/resume_pipeline/jobs/${id}/`, data);
 export const hrUpdateWeights  = (id, data) => api.put(`/resume_pipeline/jobs/${id}/weights/`, data);
 export const hrGetJobResults  = (id) => api.get(`/resume_pipeline/jobs/${id}/submissions/`);
-export const updateSubmissionStatus = (submissionId, status) => 
-  api.patch(`/resume_pipeline/submissions/${submissionId}/`, { status });
+export const updateSubmissionStatus = (id, status) => 
+  api.patch(`/resume_pipeline/submissions/${id}/`, { status })
+
 
 // --- Candidate -- Resume Submission ---
 // Example helper update
 // api/index.js
 export const getJobPostings = () => 
-  fetch('http://127.0.0.1:8000/api/resume_pipeline/public/jobs/')
-    .then(res => res.json());
+  api.get('/resume_pipeline/jobs/');
 
-export const submitResume = (formData) => fetch(`${BASE}/resume_pipeline/submit/`, {
-  method: 'POST',
-  headers: { 
-    // Note: Do NOT add Content-Type for FormData, browser does it automatically
-    'Authorization': `Bearer ${localStorage.getItem('access')}` 
-  },
-  body: formData
-}).then(r => r.json());
+export const submitResume = (formData) => {
+  const token = localStorage.getItem('access'); // Matches your authHeaders() logic
+
+  return fetch(`${BASE}/resume_pipeline/submit/`, {
+    method: 'POST',
+    headers: {
+      // We skip 'Content-Type' so the browser handles the boundary
+      'Authorization': token ? `Bearer ${token}` : '',
+    },
+    body: formData, // Send the raw object, NO JSON.stringify
+  }).then((r) => r.json());
+};
 
 
 // Auth

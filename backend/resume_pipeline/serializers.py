@@ -34,14 +34,13 @@ class SubmissionSerializer(serializers.ModelSerializer):
         fields = [
             "id", "job", "job_title",
             "candidate_name", "candidate_email", "candidate_id", "resume_file",
-            "status", "error_message",
+            "status",
             "candidate_skills", "candidate_degree", "candidate_years_exp",
             "skills_score", "experience_score", "education_score",
             "semantic_score", "ats_score",
             "submitted_at", "scored_at",
         ]
         read_only_fields = [
-            "status", "error_message",
             "candidate_skills", "candidate_degree", "candidate_years_exp",
             "skills_score", "experience_score", "education_score",
             "semantic_score", "ats_score",

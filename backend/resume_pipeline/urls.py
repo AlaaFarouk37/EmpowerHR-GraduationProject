@@ -7,8 +7,7 @@ from .views import (
 
 urlpatterns = [
     # Candidate-facing: Publicly viewable list
-    path("public/jobs/", CandidateJobListView.as_view(), name='candidate-job-list'),
-
+    path('jobs/', CandidateJobListView.as_view(), name='candidate-job-list'),
     # HR-facing: Protected management views
     path("jobs/", JobListCreateView.as_view()), 
     path("jobs/<int:pk>/", JobDetailView.as_view()),

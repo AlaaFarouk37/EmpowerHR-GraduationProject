@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Spinner, Modal, Btn, Badge, useToast } from '../../components/shared/index.jsx';
-// Added: DND imports and icons
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Users, Star, Clock, XCircle, CheckCircle } from 'lucide-react';
-import { hrGetJobs, hrCreateJob, hrUpdateJob, updateSubmissionStatus,hrGetJobResults } from '../../api/index.js';
+import { hrGetJobs, hrUpdateJob, updateSubmissionStatus, hrGetJobResults } from '../../api/index.js';
 
 // --- STYLES & HELPERS ---
 const DEGREES = ['Unknown', 'High School', 'Associate', 'Bachelor', 'Master', 'PhD'];
@@ -12,7 +11,7 @@ const inputStyle = { width: '100%', padding: '11px 14px', background: 'var(--gra
 const labelStyle = { display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' };
 
 // --- KANBAN COMPONENTS ---
-const DraggableCandidate = ({ candidate, onDrop }) => {
+const DraggableCandidate = ({ candidate }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'CANDIDATE',
     item: { id: candidate.id },
@@ -24,8 +23,10 @@ const DraggableCandidate = ({ candidate, onDrop }) => {
       opacity: isDragging ? 0.5 : 1, padding: 12, background: 'white', borderRadius: 8, 
       border: '1px solid #EAECF0', marginBottom: 8, cursor: 'grab', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' 
     }}>
-      <div style={{ fontWeight: 700, fontSize: 13 }}>{candidate.candidate_name || `Applicant #${candidate.id}`}</div>
-      <div style={{ fontSize: 11, color: 'var(--gray-500)' }}>Match: {(candidate.match_score * 100).toFixed(0)}%</div>
+      <div style={{ fontWeight: 700, fontSize: 13 }}>{candidate.candidate_name || "New Applicant"}</div>
+      <div style={{ fontSize: 11, color: '#6B7280' }}>
+        ATS Score: {candidate.ats_score ? candidate.ats_score.toFixed(1) : 'N/A'}%
+      </div>
     </div>
   );
 };
@@ -38,16 +39,20 @@ const KanbanColumn = ({ title, status, icon, bgColor, candidates, onDrop }) => {
   }));
 
   return (
-    <div ref={drop} style={{ background: bgColor, borderRadius: 12, padding: 12, minHeight: 400, border: isOver ? '2px dashed #6366F1' : '2px solid transparent' }}>
+    <div ref={drop} style={{ 
+      background: bgColor, borderRadius: 12, padding: 12, minHeight: 400, 
+      border: isOver ? '2px dashed #6366F1' : '2px solid transparent',
+      transition: 'all 0.2s ease'
+    }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 700, fontSize: 12, color: 'var(--gray-700)' }}>
         {icon} {title} ({candidates.length})
       </div>
-      {candidates.map(c => <DraggableCandidate key={c.id} candidate={c} onDrop={onDrop} />)}
+      {candidates.map(c => <DraggableCandidate key={c.id} candidate={c} />)}
     </div>
   );
 };
 
-// --- FORM COMPONENTS (Existing) ---
+// --- FORM COMPONENTS ---
 const WeightInput = ({ label, fieldKey, field }) => (
   <div>
     <label style={labelStyle}>{label}</label>
@@ -55,7 +60,7 @@ const WeightInput = ({ label, fieldKey, field }) => (
   </div>
 );
 
-const FormFields = ({ form, field, weightsValid }) => (
+const FormFields = ({ form, field }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
     <div>
       <label style={labelStyle}>Job Title *</label>
@@ -95,7 +100,6 @@ export function HRJobPostingsPage() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
-  const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showPipeline, setShowPipeline] = useState(false);
   const [candidates, setCandidates] = useState([]);
@@ -115,50 +119,33 @@ export function HRJobPostingsPage() {
 
   useEffect(() => { load(); }, []);
 
-const handleOpenPipeline = async (job) => {
-  if (!job?.id) {
-    console.error("No Job ID provided to handleOpenPipeline");
-    return;
-  }
-  
-  setSelected(job);
-  setShowPipeline(true);
-  
-  try {
-    // Calling your specific helper
-    const data = await hrGetJobResults(job.id); 
-    setCandidates(Array.isArray(data) ? data : []);
-  } catch (err) {
-    toast('Check console - the API returned an error', 'error');
-  }
-};
+  const handleOpenPipeline = async (job) => {
+    setSelected(job);
+    setShowPipeline(true);
+    try {
+      const data = await hrGetJobResults(job.id); 
+      setCandidates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      toast('Failed to load pipeline', 'error');
+    }
+  };
 
-const handleCandidateMove = async (candidateId, newStatus) => {
-  // 1. Immediate UI Update
+  const handleCandidateMove = async (candidateId, newStatus) => {
+  // 1. Optimistic Update (makes it stay in place)
+  const previousCandidates = [...candidates];
   setCandidates(prev => prev.map(c => 
     c.id === candidateId ? { ...c, status: newStatus } : c
   ));
 
   try {
-    // 2. API Call
-    const res = await updateSubmissionStatus(candidateId, newStatus);
-    
-    // 3. Sync with server response
-    const updated = res.data || res;
-    setCandidates(prev => prev.map(c => 
-      c.id === candidateId ? updated : c
-    ));
-    
-    toast('Status updated', 'success');
+    // 2. The PATCH call
+    await updateSubmissionStatus(candidateId, newStatus);
+    toast('Moved to ' + newStatus, 'success');
   } catch (err) {
-    console.error("Patch failed:", err);
-    toast('Failed to save to database', 'error');
-    
-    // 4. Rollback only on actual error
-    if (selected?.id) {
-      const res = await hrGetJobResults(selected.id);
-      setCandidates(res.data || res);
-    }
+    // 3. If it fails (like a 400 error from Django), snap it back
+    console.error("Move failed:", err.response?.data || err.message);
+    setCandidates(previousCandidates);
+    toast('Failed to save: ' + (err.response?.data?.status || 'Server Error'), 'error');
   }
 };
 
@@ -167,7 +154,10 @@ const handleCandidateMove = async (candidateId, newStatus) => {
     return Math.abs(total - 1.0) < 0.001;
   };
 
-  const field = (key) => ({ value: form[key], onChange: e => setForm(f => ({ ...f, [key]: e.target.value })) });
+  const field = (key) => ({ 
+    value: form[key], 
+    onChange: e => setForm(f => ({ ...f, [key]: e.target.value })) 
+  });
 
   const handleUpdate = async () => {
     setSaving(true);
@@ -179,14 +169,12 @@ const handleCandidateMove = async (candidateId, newStatus) => {
     } catch { toast('Failed to update', 'error'); }
     setSaving(false);
   };
-  
+
+  if (loading) return <Spinner />;
 
   return (
     <DndProvider backend={HTML5Backend}>
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 32px' }}>
-        {/* Header and Stats (Omitted for brevity, keep your original) */}
-
-        {/* Table */}
         <div style={{ background: 'white', borderRadius: 24, border: '1px solid #EAECF0', overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -197,26 +185,50 @@ const handleCandidateMove = async (candidateId, newStatus) => {
               </tr>
             </thead>
             <tbody>
-              {jobs.map(job => (
-                <tr key={job.id} style={{ borderBottom: '1px solid #F3F4F6' }}>
-                  <td style={{ padding: '16px 20px' }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{job.title}</div>
-                  </td>
-                  <td style={{ padding: '16px 20px' }}>{job.submission_count ?? 0}</td>
-                  <td style={{ padding: '16px 20px' }}><Badge label={job.is_active ? 'Active' : 'Inactive'} color={job.is_active ? 'green' : 'gray'} /></td>
-                  <td style={{ padding: '16px 20px' }}>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <Btn size="sm" variant="primary" onClick={() => handleOpenPipeline(job)}>Pipeline</Btn>
-                      <Btn size="sm" variant="ghost" onClick={() => { setSelected(job); setForm({...job}); setShowEdit(true); }}>Edit</Btn>
+              {jobs.map((job) => (
+                  <div 
+                    key={job.id} 
+                    style={{ 
+                      background: 'white', 
+                      padding: '24px', 
+                      borderRadius: 20, 
+                      border: '1px solid #EAECF0',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <div>
+                      <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{job.title}</h3>
+                      <p style={{ color: '#667085', fontSize: 14 }}>{job.company_name || 'Empower HR'}</p>
                     </div>
-                  </td>
-                </tr>
-              ))}
+
+                    {/* --- UPDATED BUTTON LOGIC --- */}
+                    <Btn
+                      variant={job.has_applied ? "ghost" : "primary"} // Changes look if applied
+                      disabled={job.has_applied} // Actually prevents the click
+                      onClick={() => handleApply(job.id)}
+                      style={{ 
+                        minWidth: 140,
+                        // Optional: Change cursor to show it's blocked
+                        cursor: job.has_applied ? 'not-allowed' : 'pointer',
+                        opacity: job.has_applied ? 0.7 : 1
+                      }}
+                    >
+                      {job.has_applied ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <CheckCircle size={16} /> Applied
+                        </span>
+                      ) : (
+                        "Apply Now"
+                      )}
+                    </Btn>
+                  </div>
+                ))}
             </tbody>
           </table>
         </div>
 
-        {/* Pipeline Modal */}
         <Modal open={showPipeline} onClose={() => setShowPipeline(false)} title={`Pipeline: ${selected?.title}`} maxWidth={1200}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginTop: 20 }}>
             <KanbanColumn title="Pending" status="pending" icon={<Users size={16}/>} bgColor="#F9FAFB" candidates={candidates.filter(c => c.status === 'pending')} onDrop={handleCandidateMove} />
@@ -227,10 +239,9 @@ const handleCandidateMove = async (candidateId, newStatus) => {
           </div>
         </Modal>
 
-        {/* Edit Modal (Existing) */}
         <Modal open={showEdit} onClose={() => setShowEdit(false)} title="Edit Job Posting">
-           <FormFields form={form} field={field} weightsValid={weightsValid} />
-           <Btn onClick={handleUpdate} disabled={saving} style={{ marginTop: 20, width: '100%' }}>{saving ? 'Saving...' : 'Save Changes'}</Btn>
+           <FormFields form={form} field={field} />
+           <Btn onClick={handleUpdate} disabled={saving || !weightsValid()} style={{ marginTop: 20, width: '100%' }}>{saving ? 'Saving...' : 'Save Changes'}</Btn>
         </Modal>
       </div>
     </DndProvider>
