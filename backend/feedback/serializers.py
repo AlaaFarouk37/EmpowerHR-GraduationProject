@@ -13,10 +13,14 @@ class FeedbackQuestionSerializer(serializers.ModelSerializer):
 
 
 class FeedbackQuestionCreateSerializer(serializers.ModelSerializer):
+    order = serializers.IntegerField(required=False, default=0)
+
     class Meta:
         model  = FeedbackQuestion
-        fields = ['questionID', 'questionText', 'fieldType', 'order']
-        read_only_fields = ['questionID']
+        fields = ['questionID', 'questionText', 'fieldType', 'order','formID']
+        read_only_fields = ['questionID','formID']
+    
+
 
 
 # ---------------------------------------------------------------------------

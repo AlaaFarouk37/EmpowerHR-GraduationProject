@@ -1,19 +1,6 @@
 from django.contrib import admin
 from .models import (FeedbackForm, FeedbackQuestion,
-                     FeedbackSubmission, FeedbackAnswer,
-                     Employee, AdminUser)
-
-
-@admin.register(Employee)
-class EmployeeAdmin(admin.ModelAdmin):
-    list_display  = ['employeeID', 'fullName', 'email']
-    search_fields = ['fullName', 'email', 'employeeID']
-
-
-@admin.register(AdminUser)
-class AdminUserAdmin(admin.ModelAdmin):
-    list_display  = ['employeeID', 'fullName']
-    search_fields = ['fullName', 'employeeID']
+                     FeedbackSubmission, FeedbackAnswer)
 
 
 class FeedbackQuestionInline(admin.TabularInline):

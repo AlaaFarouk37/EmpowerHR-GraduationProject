@@ -12,7 +12,7 @@ from .serializers import (
     CandidateRegisterSerializer,
 )
 from .permissions import IsAdmin
-from .models import generate_employee_id
+from .models import generate_portal_id
 
 
 class LoginView(TokenObtainPairView):
@@ -108,7 +108,7 @@ class CreateEmployeeView(APIView):
             )
 
         # Auto-generate employee_id — admin never supplies this
-        employee_id = generate_employee_id()
+        employee_id = generate_portal_id(prefix="EMP", field_name="employee_id")
 
         user = User.objects.create_user(
             email       = request.data["email"],

@@ -1,10 +1,23 @@
 from django.utils import timezone
+from httpcore import request
+from huggingface_hub import User
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from accounts.models import User
+
+
+# Import permission classes from accounts app
+try:
+    from accounts.permissions import IsHRManager, IsInternalEmployee
+except ImportError:
+    # Fallback if accounts app not available
+    IsHRManager        = IsAuthenticated
+    IsInternalEmployee = IsAuthenticated
 
 from .models import (FeedbackForm, FeedbackQuestion,
-                     FeedbackSubmission, FeedbackAnswer, Employee)
+                     FeedbackSubmission, FeedbackAnswer)
 from .serializers import (
     FeedbackFormListSerializer,
     FeedbackFormDetailSerializer,
@@ -24,6 +37,7 @@ class HRFormListCreateView(APIView):
     GET  /api/feedback/hr/forms/        list ALL forms (active and inactive)
     POST /api/feedback/hr/forms/        create a new form
     """
+    permission_classes = [IsAuthenticated, IsHRManager]
 
     def get(self, request):
         forms = FeedbackForm.objects.prefetch_related(
@@ -47,6 +61,7 @@ class HRFormDetailView(APIView):
     PUT    /api/feedback/hr/forms/<form_id>/   update form title/description
     DELETE /api/feedback/hr/forms/<form_id>/   delete form
     """
+    permission_classes = [IsAuthenticated, IsHRManager]
 
     def get_form(self, form_id):
         try:
@@ -85,6 +100,7 @@ class HRFormActivateView(APIView):
     POST /api/feedback/hr/forms/<form_id>/deactivate/
     Deactivates this form.
     """
+    permission_classes = [IsAuthenticated, IsHRManager]
 
     def post(self, request, form_id, action):
         try:
@@ -113,6 +129,7 @@ class HRQuestionListCreateView(APIView):
     GET  /api/feedback/hr/forms/<form_id>/questions/    list questions
     POST /api/feedback/hr/forms/<form_id>/questions/    add a question
     """
+    permission_classes = [IsAuthenticated, IsHRManager]
 
     def get_form(self, form_id):
         try:
@@ -128,17 +145,21 @@ class HRQuestionListCreateView(APIView):
         return Response(FeedbackQuestionCreateSerializer(questions, many=True).data)
 
     def post(self, request, form_id):
-        form = self.get_form(form_id)
-        if not form:
-            return Response({'error': 'Form not found.'}, status=status.HTTP_404_NOT_FOUND)
-        serializer = FeedbackQuestionCreateSerializer(data=request.data)
-        if not serializer.is_valid():
+        print("1. RAW DATA RECEIVED:", request.data) # Is this empty?
+        
+        try:
+            serializer = FeedbackQuestionCreateSerializer(data=request.data)
+            if serializer.is_valid():
+                print("2. SERIALIZER IS VALID")
+                serializer.save(formID_id=form_id) # Use the ID directly if possible
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+            print("3. VALIDATION FAILED:", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        question = serializer.save(formID=form)
-        return Response(
-            FeedbackQuestionCreateSerializer(question).data,
-            status=status.HTTP_201_CREATED
-        )
+            
+        except Exception as e:
+            print("4. CRITICAL CRASH:", str(e))
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class HRQuestionDetailView(APIView):
@@ -146,6 +167,7 @@ class HRQuestionDetailView(APIView):
     PUT    /api/feedback/hr/questions/<question_id>/   update question
     DELETE /api/feedback/hr/questions/<question_id>/   delete question
     """
+    permission_classes = [IsAuthenticated, IsHRManager]
 
     def get_question(self, question_id):
         try:
@@ -155,13 +177,15 @@ class HRQuestionDetailView(APIView):
 
     def put(self, request, question_id):
         question = self.get_question(question_id)
+        
         if not question:
             return Response({'error': 'Question not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = FeedbackQuestionCreateSerializer(
             question, data=request.data, partial=True)
         if not serializer.is_valid():
+            print("SERIALIZER ERRORS from put:", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        question = serializer.save()
+        question = serializer.save(formID=question.formID)
         return Response(FeedbackQuestionCreateSerializer(question).data)
 
     def delete(self, request, question_id):
@@ -181,6 +205,7 @@ class HRSubmissionsView(APIView):
     GET /api/feedback/hr/submissions/               all submissions across all forms
     GET /api/feedback/hr/submissions/?form_id=<id>  filter by form
     """
+    permission_classes = [IsAuthenticated, IsHRManager]
 
     def get(self, request):
         qs = FeedbackSubmission.objects.select_related(
@@ -203,6 +228,7 @@ class FeedbackFormListView(APIView):
     GET /api/feedback/forms/
     Employee sees only the active form.
     """
+    permission_classes = [IsAuthenticated, IsInternalEmployee]
 
     def get(self, request):
         forms = FeedbackForm.objects.prefetch_related('questions').filter(isActive=True)
@@ -225,6 +251,7 @@ class FeedbackFormDetailView(APIView):
     """
     GET /api/feedback/forms/<form_id>/?employee_id=<id>
     """
+    permission_classes = [IsAuthenticated, IsInternalEmployee]
 
     def get(self, request, form_id):
         try:
@@ -248,24 +275,33 @@ class FeedbackSubmitView(APIView):
     """
     POST /api/feedback/forms/<form_id>/submit/
     """
+    def dispatch(self, request, *args, **kwargs):
+        print(f"--- DISPATCH REACHED: {request.method} {request.path} ---")
+        return super().dispatch(request, *args, **kwargs)
+    
+    permission_classes = [IsAuthenticated, IsInternalEmployee]
 
     def post(self, request, form_id):
+        print("PAYLOAD RECEIVED:", request.data) # <--- Step 1: Check keys
+    
+        serializer = SubmitFeedbackSerializer(data=request.data)
+        if not serializer.is_valid():
+            print("SERIALIZER ERRORS:", serializer.errors) # <--- Step 2: Check validation
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
         try:
             form = FeedbackForm.objects.prefetch_related('questions').get(pk=form_id)
         except FeedbackForm.DoesNotExist:
             return Response({'error': 'Form not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = SubmitFeedbackSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         employee_id = serializer.validated_data['employeeID']
         answers     = serializer.validated_data['answers']
 
-        if not Employee.objects.filter(pk=employee_id).exists():
-            return Response({'error': f'Employee {employee_id} not found.'},
-                            status=status.HTTP_404_NOT_FOUND)
-
+        if not User.objects.filter(employee_id=employee_id).exists():
+             return Response({'error': f'Employee {employee_id} not found.'},
+                    status=status.HTTP_404_NOT_FOUND)
+        
         valid_question_ids = set(form.questions.values_list('questionID', flat=True))
         submitted_ids      = set(a['questionID'] for a in answers)
         invalid            = submitted_ids - valid_question_ids

@@ -1,6 +1,15 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, AllowAny
+
+try:
+    from accounts.permissions import IsHRManager, IsInternalEmployee
+except ImportError:
+    # Fallback if accounts app not available
+    IsHRManager        = IsAuthenticated
+    IsInternalEmployee = IsAuthenticated
+
 
 from feedback.models import FeedbackForm, FeedbackSubmission
 from .models import AttritionPrediction
@@ -21,6 +30,7 @@ class RunAttritionPredictionView(APIView):
         "form_id": "abc123"   // if omitted, uses the latest active form
     }
     """
+    permission_classes = [IsAuthenticated, IsHRManager]
 
     def post(self, request):
         # Find the form to use
@@ -101,6 +111,8 @@ class AttritionPredictionListView(APIView):
     GET /api/attrition/predictions/?employee_id=<id>
     GET /api/attrition/predictions/?risk_level=High
     """
+    permission_classes = [IsAuthenticated, IsHRManager]
+
 
     def get(self, request):
         qs = AttritionPrediction.objects.select_related('employeeID').all()
@@ -123,7 +135,7 @@ class AttritionPredictionLatestView(APIView):
     Returns the most recent prediction for every employee.
     Useful for the HR dashboard overview.
     """
-
+    permission_classes = [IsAuthenticated, IsHRManager]
     def get(self, request):
         # Get the latest prediction per employee
         from django.db.models import Max

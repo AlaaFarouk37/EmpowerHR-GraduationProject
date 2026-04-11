@@ -11,9 +11,9 @@ class JobSerializer(serializers.ModelSerializer):
             "id", "title", "description", "required_skills",
             "min_experience_years", "required_degree",
             "weight_skills", "weight_experience", "weight_education", "weight_semantic",
-            "is_active", "created_at", "submission_count",
+            "is_active", "created_at", "submission_count","created_by",
         ]
-        read_only_fields = ["created_at", "required_skills"]
+        read_only_fields = ["id","created_at", "required_skills"]
 
     def validate(self, data):
         ws = data.get("weight_skills",     self.instance.weight_skills     if self.instance else 0.40)
@@ -33,7 +33,7 @@ class SubmissionSerializer(serializers.ModelSerializer):
         model  = Submission
         fields = [
             "id", "job", "job_title",
-            "candidate_name", "candidate_email",
+            "candidate_name", "candidate_email", "candidate_id", "resume_file",
             "status", "error_message",
             "candidate_skills", "candidate_degree", "candidate_years_exp",
             "skills_score", "experience_score", "education_score",
@@ -45,7 +45,7 @@ class SubmissionSerializer(serializers.ModelSerializer):
             "candidate_skills", "candidate_degree", "candidate_years_exp",
             "skills_score", "experience_score", "education_score",
             "semantic_score", "ats_score",
-            "submitted_at", "scored_at",
+            "submitted_at", "scored_at","candidate_id",
         ]
 
 
@@ -61,3 +61,17 @@ class SubmissionUploadSerializer(serializers.ModelSerializer):
         if value.size > 10 * 1024 * 1024:
             raise serializers.ValidationError("File too large (max 10 MB).")
         return value
+
+class CandidateJobSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the candidate-facing job board.
+    Hides internal weights and administrative data.
+    """
+    class Meta:
+        model = Job
+        fields = [
+            "id", "title", "description", 
+            "min_experience_years", "required_degree", 
+            "created_at"
+        ]
+        read_only_fields = ["id", "created_at"]

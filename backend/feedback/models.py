@@ -1,74 +1,12 @@
 import uuid
 from django.db import models
+from django.conf import settings
+
 
 
 def gen_id():
     return uuid.uuid4().hex[:20]
 
-
-class Employee(models.Model):
-    """
-    Employee model with all fields required by the attrition prediction model.
-    """
-    GENDER_CHOICES       = [('Male', 'Male'), ('Female', 'Female')]
-    EDUCATION_CHOICES    = [(1, 'High School'), (2, 'Associate Degree'),
-                             (3, "Bachelor's Degree"), (4, "Master's Degree"), (5, 'PhD')]
-    JOB_LEVEL_CHOICES    = [(1, 'Entry'), (2, 'Mid'), (3, 'Senior')]
-    COMPANY_SIZE_CHOICES = [(1, 'Small'), (2, 'Medium'), (3, 'Large')]
-    MARITAL_CHOICES      = [('Single', 'Single'), ('Married', 'Married'),
-                             ('Divorced', 'Divorced')]
-
-    # Identity
-    employeeID         = models.CharField(max_length=50, primary_key=True, default=gen_id)
-    fullName           = models.CharField(max_length=150)
-    email              = models.CharField(max_length=150, unique=True)
-
-    # Display fields for HR dashboard
-    jobTitle           = models.CharField(max_length=100, null=True, blank=True)
-    team               = models.CharField(max_length=100, null=True, blank=True)
-    department         = models.CharField(max_length=100, null=True, blank=True)
-
-    # Profile fields used by attrition model
-    age                = models.IntegerField(null=True, blank=True)
-    gender             = models.CharField(max_length=10, choices=GENDER_CHOICES,
-                                          null=True, blank=True)
-    yearsAtCompany     = models.IntegerField(null=True, blank=True)
-    monthlyIncome      = models.IntegerField(null=True, blank=True)
-    performanceRating  = models.IntegerField(null=True, blank=True)
-    numberOfPromotions = models.IntegerField(null=True, blank=True)
-    overtime           = models.BooleanField(null=True, blank=True)
-    educationLevel     = models.IntegerField(choices=EDUCATION_CHOICES,
-                                             null=True, blank=True)
-    numberOfDependents = models.IntegerField(null=True, blank=True)
-    jobLevel           = models.IntegerField(choices=JOB_LEVEL_CHOICES,
-                                             null=True, blank=True)
-    companySize        = models.IntegerField(choices=COMPANY_SIZE_CHOICES,
-                                             null=True, blank=True)
-    companyTenure      = models.IntegerField(null=True, blank=True)
-    remoteWork         = models.BooleanField(null=True, blank=True)
-    maritalStatus      = models.CharField(max_length=20, choices=MARITAL_CHOICES,
-                                          null=True, blank=True)
-
-    class Meta:
-        db_table = 'feedback_employee'
-
-    def __str__(self):
-        return f"{self.fullName} ({self.employeeID})"
-
-
-class AdminUser(models.Model):
-    """
-    Minimal Admin stub. Replace with full Admin model later.
-    Named AdminUser to avoid conflict with Django's built-in Admin.
-    """
-    employeeID = models.CharField(max_length=50, primary_key=True, default=gen_id)
-    fullName   = models.CharField(max_length=150)
-
-    class Meta:
-        db_table = 'feedback_admin'
-
-    def __str__(self):
-        return f"Admin: {self.fullName}"
 
 
 class FeedbackForm(models.Model):
@@ -80,7 +18,7 @@ class FeedbackForm(models.Model):
     title            = models.CharField(max_length=200)
     description      = models.TextField(blank=True, null=True)
     createdByAdminID = models.ForeignKey(
-                         AdminUser, on_delete=models.SET_NULL,
+                         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                          null=True, blank=True,
                          db_column='createdByAdminID',
                          related_name='created_forms')
@@ -146,10 +84,12 @@ class FeedbackSubmission(models.Model):
                      FeedbackForm, on_delete=models.CASCADE,
                      db_column='formID',
                      related_name='submissions')
-    employeeID   = models.ForeignKey(
-                     Employee, on_delete=models.CASCADE,
-                     db_column='employeeID',
-                     related_name='submissions')
+    employeeID = models.ForeignKey(
+                    settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                    db_column='employeeID',
+                    to_field='employee_id',
+                    related_name='submissions')
+    
     submittedAt  = models.DateTimeField(null=True, blank=True)
     status       = models.CharField(
                      max_length=20, choices=STATUS_CHOICES,

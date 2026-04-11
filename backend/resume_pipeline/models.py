@@ -1,4 +1,5 @@
 from django.db import models
+from core import settings
 
 
 class Job(models.Model):
@@ -8,6 +9,11 @@ class Job(models.Model):
     required_skills      = models.JSONField(default=list)   # extracted from JD automatically
     min_experience_years = models.FloatField(default=0)
     required_degree      = models.CharField(max_length=20, default="Unknown")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='created_jobs')
 
     # User-defined weights (must sum to 1.0)
     weight_skills     = models.FloatField(default=0.40)
@@ -27,11 +33,17 @@ class Submission(models.Model):
 
     class Status(models.TextChoices):
         PENDING    = "pending",    "Pending"
-        PROCESSING = "processing", "Processing"
-        DONE       = "done",       "Done"
-        FAILED     = "failed",     "Failed"
+        SHORTLISTED = 'shortlisted', 'Shortlisted'
+        IN_PROGRESS = 'in-progress', 'In-Progress'
+        REJECTED = 'rejected', 'Rejected'
+        APPROVED = 'approved', 'Approved'
 
     job             = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="submissions")
+    candidate_id = models.ForeignKey(
+                    settings.AUTH_USER_MODEL,
+                    on_delete=models.SET_NULL,
+                    null=True, blank=True,
+                    related_name='applying')
     candidate_name  = models.CharField(max_length=255, blank=True)
     candidate_email = models.EmailField(blank=True)
     resume_file     = models.FileField(upload_to="resumes/")

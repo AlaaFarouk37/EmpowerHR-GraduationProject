@@ -65,21 +65,93 @@ export function HRFormsPage() {
     load();
   };
 
-  const handleAddQuestion = async () => {
-    if (!qData.questionText.trim()) { toast('Question text is required', 'error'); return; }
-    setSaving(true);
-    const res = await hrAddQuestion(selectedForm.formID, qData);
+const handleAddQuestion = async () => {
+  if (!qData.questionText) return toast('Question text is required', 'error');
+  
+  setSaving(true);
+  try {
+    const payload = {
+      questionText: qData.questionText,
+      fieldType: qData.fieldType,
+      order: parseInt(qData.order) || 0
+    };
+
+    const res = await hrAddQuestion(selectedForm.formID, payload);
+
+    // --- SUCCESS UI ---
+    toast('Question added successfully');
+    setShowAddQ(false); 
+    setQData({ questionText: '', fieldType: 'score_1_4', order: 0 });
+
+    // --- DEFENSIVE STATE UPDATE ---
+    // Ensure we have an array to spread, even if the backend sent null/undefined
+    const existingQuestions = Array.isArray(selectedForm?.questions) 
+      ? selectedForm.questions 
+      : [];
+
+    const updatedForm = { 
+      ...selectedForm, 
+      questions: [...existingQuestions, res] 
+    };
+
+    setSelected(updatedForm);
+
+    if (typeof setForms === 'function') {
+      setForms(prev => {
+        if (!Array.isArray(prev)) return prev;
+        return prev.map(f => f.formID === selectedForm.formID ? updatedForm : f);
+      });
+    }
+
+  } catch (err) {
+    console.error("Submission Error:", err);
+    const errorDetail = err.response?.data?.detail || 'Failed to add question';
+    toast(errorDetail, 'error');
+  } finally {
     setSaving(false);
-    if (res.questionID) {
-      toast('Question added');
-      setShowAddQ(false);
-      setQData({ questionText: '', fieldType: 'score_1_4', order: 0 });
-      const updated = await hrGetForms();
-      setForms(Array.isArray(updated) ? updated : []);
-      const fresh = updated.find(f => f.formID === selectedForm.formID);
-      if (fresh) setSelected(fresh);
-    } else toast('Failed to add question', 'error');
-  };
+  }
+};
+// const handleAddQuestion = async () => {
+//   if (!qData.questionText.trim()) {
+//     toast('Question text is required', 'error');
+//     return;
+//   }
+
+//   try {
+//     setSaving(true);
+
+//     const res = await hrAddQuestion(selectedForm.formID, qData);
+
+//     // Axios returns data inside res.data
+//     const data = res?.data;
+
+//     if (data?.questionID) {
+//       toast('Question added');
+//       setShowAddQ(false);
+//       setQData({ questionText: '', fieldType: 'score_1_4', order: 0 });
+
+//       const updated = await hrGetForms();
+//       setForms(Array.isArray(updated) ? updated : []);
+
+//       const fresh = updated.find(f => f.formID === selectedForm.formID);
+//       if (fresh) setSelected(fresh);
+//     } else {
+//       toast('Failed to add question', 'error');
+//     }
+
+//   } catch (err) {
+//     console.error(err);
+
+//     // VERY useful for debugging backend issues
+//     console.log(err?.response?.data);
+  
+
+//     toast('Something went wrong', 'error');
+
+//   } finally {
+//     setSaving(false); // ← guarantees button works again
+//   }
+// };
 
   const handleDeleteQuestion = async (q) => {
     if (!window.confirm('Delete this question?')) return;

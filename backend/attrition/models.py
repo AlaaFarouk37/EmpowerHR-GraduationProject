@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
-from feedback.models import Employee
+from core import settings
+
 
 
 def gen_id():
@@ -22,9 +23,11 @@ class AttritionPrediction(models.Model):
     ]
 
     predictionID   = models.CharField(max_length=50, primary_key=True, default=gen_id)
-    employeeID     = models.ForeignKey(
-                       Employee, on_delete=models.CASCADE,
-                       db_column='employeeID',
+    employeeID = models.ForeignKey(
+                     settings.AUTH_USER_MODEL,
+                        on_delete=models.CASCADE,
+                        db_column='employeeID',
+                        to_field='employee_id',
                        related_name='attrition_predictions')
     riskScore      = models.FloatField()           # raw probability 0.0 - 1.0
     riskLevel      = models.CharField(max_length=10, choices=RISK_CHOICES)

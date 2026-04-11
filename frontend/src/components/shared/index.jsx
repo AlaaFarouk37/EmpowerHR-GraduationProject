@@ -173,7 +173,7 @@ export function Btn({ children, variant = 'primary', size = 'md', ...props }) {
     outline: { background: 'transparent', color: 'var(--red)', border: '2px solid var(--red)' },
   };
   return (
-    <button {...props} style={{ ...base, ...variants[variant], ...props.style }}
+    <button type={props.type || 'button'} {...props} style={{ ...base, ...variants[variant], ...props.style }}
       onMouseEnter={e => { if (variant === 'primary') e.currentTarget.style.background = '#d02a14'; }}
       onMouseLeave={e => { if (variant === 'primary') e.currentTarget.style.background = 'var(--red)'; }}
     >

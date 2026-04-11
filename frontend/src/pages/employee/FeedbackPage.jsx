@@ -100,10 +100,18 @@ export function EmployeeFeedbackPage() {
     setAnswers(saved);
   };
 
-  const handleSubmit = async () => {
-    const unanswered = openForm.questions.filter(q => answers[q.questionID] === undefined);
-    if (unanswered.length > 0) { toast('Please answer all questions', 'error'); return; }
+const handleSubmit = async () => {
+  // 1. Validation
+  const unanswered = openForm.questions.filter(q => answers[q.questionID] === undefined);
+  if (unanswered.length > 0) { 
+    toast('Please answer all questions', 'error'); 
+    return; 
+  }
 
+  setSubmitting(true);
+
+  try {
+    // 2. Prepare Payload
     const payload = {
       employeeID: EMPLOYEE_ID,
       answers: openForm.questions.map(q => {
@@ -114,20 +122,41 @@ export function EmployeeFeedbackPage() {
         return { questionID: q.questionID };
       }),
     };
+    console.log('EMPLOYEE_ID:', EMPLOYEE_ID);
+    console.log('payload:', payload);
+    // 3. API Call
+   
+    const res = await submitFeedback(openForm.formID, payload);
+    
 
-    setSubmitting(true);
-    try {
-      const res = await submitFeedback(openForm.formID, payload);
-      if (res.submissionID) {
-        toast('Feedback submitted successfully!');
-        setOpenForm(null);
-        load();
-      } else throw new Error(JSON.stringify(res));
-    } catch (e) {
-      toast('Submission failed: ' + e.message, 'error');
-    }
+    // 4. UI SUCCESS ACTIONS (Move these UP)
+    // We close the modal and toast immediately so the user knows it worked
+    toast('Feedback submitted successfully!');
+    setOpenForm(null); 
+
+    // 5. STATE SYNCHRONIZATION (The "Heavy Lifting")
+    // We update the local list so the "Pending" badge changes to "Completed"
+    setForms(prev => {
+      if (!Array.isArray(prev)) return prev;
+      return prev.map(f => 
+        f.formID === openForm.formID 
+          ? { ...f, submission: { status: 'Completed', answers: payload.answers } } 
+          : f
+      );
+    });
+
+    // Optional: Refresh from server to sync any backend-generated timestamps
+    load();
+
+  } catch (e) {
+    // 6. ERROR HANDLING
+    console.error("Submission failed:", e.response?.data || e.message);
+    toast('Submission failed: ' + (e.response?.data?.error || e.message), 'error');
+    // We do NOT close the modal here, allowing the employee to try again
+  } finally {
     setSubmitting(false);
-  };
+  }
+};
 
   const pending   = forms.filter(f => getStatus(f) === 'pending').length;
   const completed = forms.filter(f => getStatus(f) === 'completed').length;

@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import timedelta
 import os
 
 BASE_DIR   = Path(__file__).resolve().parent.parent
@@ -14,13 +15,13 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "corsheaders",
-    "resume_pipeline",
-    'feedback',
-    'attrition',
-    'accounts',
     "rest_framework",
     "rest_framework_simplejwt",
-    "rest_framework_simplejwt.token_blacklist",  
+    "rest_framework_simplejwt.token_blacklist",
+    "accounts",
+    "resume_pipeline",
+    "feedback",
+    "attrition",
 ]
 
 MIDDLEWARE = [
@@ -28,8 +29,10 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
 ROOT_URLCONF = "core.urls"
@@ -56,35 +59,15 @@ MEDIA_URL  = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 STATIC_URL = "/static/"
 
-REST_FRAMEWORK = {
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
-}
-
-CORS_ALLOW_ALL_ORIGINS = True
-
-# Path to skills taxonomy CSV
-SKILLS_TAXONOMY_CSV = os.getenv(
-    "SKILLS_TAXONOMY_CSV",
-    str(BASE_DIR / "it-job-roles-skills-analysis.csv"),
-)
-
-# Sentence transformer model
-SENTENCE_TRANSFORMER_MODEL = os.getenv(
-    "SENTENCE_TRANSFORMER_MODEL",
-    "anass1209/resume-job-matcher-all-MiniLM-L6-v2",
-)
-
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LANGUAGE_CODE = "en-us"
 TIME_ZONE     = "UTC"
 USE_TZ        = True
 
-from datetime import timedelta
-
 # --- Custom user model ---
 AUTH_USER_MODEL = "accounts.User"
 
-# --- DRF default auth ---
+# --- DRF: JWT auth by default, all endpoints require login ---
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -96,18 +79,29 @@ REST_FRAMEWORK = {
 
 # --- JWT configuration ---
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME":  timedelta(minutes=30),   # short-lived
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),        # refreshed silently
-    "ROTATE_REFRESH_TOKENS":  True,   # new refresh token on every refresh call
-    "BLACKLIST_AFTER_ROTATION": True, # old refresh token blacklisted on rotate
-    "AUTH_HEADER_TYPES": ("Bearer",),
-    "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.CustomTokenObtainPairSerializer",
+    "ACCESS_TOKEN_LIFETIME":    timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME":   timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS":    True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "AUTH_HEADER_TYPES":        ("Bearer",),
+    "TOKEN_OBTAIN_SERIALIZER":  "accounts.serializers.CustomTokenObtainPairSerializer",
 }
 
-# --- CORS (React dev server) ---
-# In production replace with your actual frontend domain
+# --- CORS ---
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",   # Vite dev server
     "http://localhost:3000",   # CRA dev server
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# --- Skills taxonomy CSV ---
+SKILLS_TAXONOMY_CSV = os.getenv(
+    "SKILLS_TAXONOMY_CSV",
+    str(BASE_DIR / "it-job-roles-skills-analysis.csv"),
+)
+
+# --- Sentence transformer model ---
+SENTENCE_TRANSFORMER_MODEL = os.getenv(
+    "SENTENCE_TRANSFORMER_MODEL",
+    "anass1209/resume-job-matcher-all-MiniLM-L6-v2",
+)
