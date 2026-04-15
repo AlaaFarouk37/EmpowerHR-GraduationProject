@@ -6,44 +6,38 @@ from .models import User
 class EmployeeCreationForm(UserCreationForm):
     class Meta:
         model  = User
-        # We only ask for the essentials; logic in models.py handles the IDs
-        fields = ("email", "full_name", "role")
+        fields = ["email", "full_name", "role"]
 
 class EmployeeChangeForm(UserChangeForm):
     class Meta:
         model  = User
-        fields = ("email", "full_name", "role", "employee_id", "candidate_id", "is_active")
+        fields = ["email", "full_name", "role", "user_id", "is_active"]
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     form     = EmployeeChangeForm
     add_form = EmployeeCreationForm
 
-    # Updated to include candidate_id in the table view
-    list_display  = ["email", "full_name", "role", "employee_id", "candidate_id", "is_active", "created_at"]
+    list_display  = ["email", "full_name", "role", "user_id", "is_active", "created_at"]
     list_filter   = ["role", "is_active"]
-    search_fields = ["email", "full_name", "employee_id", "candidate_id"]
+    search_fields = ["email", "full_name", "user_id"]
     ordering      = ["-created_at"]
 
-    # Updated fieldsets for the "Edit User" page
+    # FIX: Changed inner tuples to lists [] to avoid admin.E008
     fieldsets = (
-        (None,             {"fields": ("email", "password")}),
-        ("Personal info",  {"fields": ("full_name", "role")}),
-        ("Identifications",{"fields": ("employee_id", "candidate_id")}), # Grouped IDs together
-        ("Permissions",    {"fields": ("is_active", "is_staff", "is_superuser")}),
+        (None,             {"fields": ["email", "password"]}),
+        ("Personal info",  {"fields": ["full_name", "role"]}),
+        ("Identifications",{"fields": ["user_id"]}), # This was the specific error!
+        ("Permissions",    {"fields": ["is_active", "is_staff", "is_superuser"]}),
     )
 
+    # FIX: Standardizing add_fieldsets
     add_fieldsets = (
         (None, {
-            "classes": ("wide",),
-            "fields":  ("email", "full_name", "role", "password1", "password2"),
+            "classes": ["wide"],
+            "fields":  ["email", "full_name", "role", "password1", "password2"],
         }),
     )
 
     def save_model(self, request, obj, form, change):
-        """
-        We don't actually need custom logic here anymore!
-        Because we moved the ID generation into the User.save() method in models.py,
-        it will happen automatically whether you create a user via React or via Admin.
-        """
         super().save_model(request, obj, form, change)

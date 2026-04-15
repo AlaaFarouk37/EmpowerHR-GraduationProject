@@ -1,5 +1,6 @@
 from django.db import models
-from core import settings
+from django.conf import settings
+import employee_management
 
 
 class Job(models.Model):
@@ -46,14 +47,16 @@ class Submission(models.Model):
             )
     ]
 
-    job             = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="submissions")
-    candidate_id = models.ForeignKey(
-                    settings.AUTH_USER_MODEL,
-                    on_delete=models.SET_NULL,
-                    null=True, blank=True,
-                    related_name='applying')
-    candidate_name  = models.CharField(max_length=255, blank=True)
-    candidate_email = models.EmailField(blank=True)
+  #  job             = models.ForeignKey(employee_management.models.Job, on_delete=models.CASCADE, related_name="submissions")
+
+    # candidate = models.ForeignKey(
+    #               #  Candidate,
+    #                 on_delete=models.SET_NULL,
+    #                 null=True, blank=True,
+    #                 related_name='applying')
+    
+    # candidate_name  =   candidate.first_name + " " + candidate.last_name if candidate else "Unknown Candidate"
+    # candidate_email = candidate.contact_email if candidate else "null"
     resume_file     = models.FileField(upload_to="resumes/")
     status = models.CharField(choices=STATUS_CHOICES, default='pending', max_length=20)  
     # ── Extracted fields ──────────────────────────────────────────────────────
@@ -78,3 +81,26 @@ class Submission(models.Model):
 
     def __str__(self):
         return f"{self.candidate_name or 'Candidate'} → {self.job.title}"
+    
+
+
+class Candidate(models.Model):
+    # Link to the User for login credentials (email/pass)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        related_name='candidate_profile'
+    )
+
+    first_name = models.CharField(max_length=255)
+    last_name = models.CharField(max_length=255)
+    contact_email = models.EmailField()
+    gender = models.CharField(max_length=20, choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')])
+    marital_status = models.CharField(max_length=50, blank=True, null=True)
+    has_disability = models.BooleanField(default=False)
+    location = models.CharField(max_length=255)
+    current_job_title = models.CharField(max_length=100, blank=True, null=True)
+
+    def __str__(self):
+        return self.full_name
+   

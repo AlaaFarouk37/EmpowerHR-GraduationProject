@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.shortcuts import get_object_or_404
 
 try:
     from accounts.permissions import IsHRManager, IsInternalEmployee
@@ -11,7 +12,8 @@ except ImportError:
     IsInternalEmployee = IsAuthenticated
 
 
-from feedback.models import FeedbackForm, FeedbackSubmission
+from feedback.models import FeedbackForm, FeedbackSubmission, FeedbackAnswer
+from accounts.models import User
 from .models import AttritionPrediction
 from .predictor import predict_risk
 from .serializers import AttritionPredictionSerializer
@@ -31,6 +33,27 @@ class RunAttritionPredictionView(APIView):
     }
     """
     permission_classes = [IsAuthenticated, IsHRManager]
+
+    def get(self, request, employee_id):
+        # 1. Fetch the user (the 'employee') using the field name 'employee_id'
+        profile = get_object_or_404(employee, employee_id=employee_id)
+
+        # 3. Get the feedback answers
+        answers_qs = FeedbackAnswer.objects.filter(employeeID=profile.employee_id)
+
+        # 4. Run prediction using the PROFILE
+        from .predictor import predict_risk
+        result = predict_risk(profile, answers_qs)
+
+        # 5. Save the result to your AttritionPrediction model
+        from .models import AttritionPrediction
+        AttritionPrediction.objects.create(
+            employeeID=profile.employee_id,
+            riskScore=result['riskScore'],
+            riskLevel=result['riskLevel']
+        )
+
+        return Response(result)
 
     def post(self, request):
         # Find the form to use
@@ -66,15 +89,16 @@ class RunAttritionPredictionView(APIView):
         predictions  = []
 
         for submission in submissions:
-            employee    = submission.employeeID
+            employee_user    = submission.employeeID
             answers_qs  = submission.answers.select_related('questionID').all()
 
             try:
-                result = predict_risk(employee, answers_qs)
+                profile = employee_user.predictionusersprofile
+                result = predict_risk(profile, answers_qs)
 
                 # Save prediction to DB
                 prediction = AttritionPrediction.objects.create(
-                    employeeID_id  = employee.employeeID,
+                    employeeID_id  = profile.employee_id,
                     riskScore      = result['riskScore'],
                     riskLevel      = result['riskLevel'],
                     feedbackFormID = form.formID,
@@ -88,8 +112,8 @@ class RunAttritionPredictionView(APIView):
 
             except Exception as e:
                 errors.append({
-                    'employeeID': employee.employeeID,
-                    'fullName':   employee.fullName,
+                    'employeeID': employee_user.employee_id,
+                    'fullName':   employee_user.full_name,
                     'error':      str(e),
                 })
 

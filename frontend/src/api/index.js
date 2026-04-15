@@ -41,6 +41,7 @@ export const hrDeleteForm    = (id)        => api.delete(`/feedback/hr/forms/${i
 export const hrActivateForm  = (id)        => api.post(`/feedback/hr/forms/${id}/activate/`, {});
 export const hrDeactivateForm= (id)        => api.post(`/feedback/hr/forms/${id}/deactivate/`, {});
 
+
 // HR Manager -- Questions
 export const hrGetQuestions    = (formID)        => api.get(`/feedback/hr/forms/${formID}/questions/`);
 export const hrAddQuestion     = (formID, data)  => api.post(`/feedback/hr/forms/${formID}/questions/`, data);

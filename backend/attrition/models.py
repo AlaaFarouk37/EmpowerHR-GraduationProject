@@ -26,8 +26,8 @@ class AttritionPrediction(models.Model):
     employeeID = models.ForeignKey(
                      settings.AUTH_USER_MODEL,
                         on_delete=models.CASCADE,
-                        db_column='employeeID',
-                        to_field='employee_id',
+                        db_column='employee_id',
+                        to_field='user_id',
                        related_name='attrition_predictions')
     riskScore      = models.FloatField()           # raw probability 0.0 - 1.0
     riskLevel      = models.CharField(max_length=10, choices=RISK_CHOICES)
