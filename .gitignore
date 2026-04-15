@@ -18,6 +18,10 @@ __pycache__/
 venv/
 .venv/
 env/
+media/
+staticfiles/
+static/
+logs/
 
 # IDEs & Editors
 .vscode/

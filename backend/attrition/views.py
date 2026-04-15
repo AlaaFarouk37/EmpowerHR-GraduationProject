@@ -1,0 +1,182 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.shortcuts import get_object_or_404
+
+try:
+    from accounts.permissions import IsHRManager, IsInternalEmployee
+except ImportError:
+    # Fallback if accounts app not available
+    IsHRManager        = IsAuthenticated
+    IsInternalEmployee = IsAuthenticated
+
+
+from feedback.models import FeedbackForm, FeedbackSubmission, FeedbackAnswer
+from accounts.models import User
+from .models import AttritionPrediction
+from .predictor import predict_risk
+from .serializers import AttritionPredictionSerializer
+
+
+class RunAttritionPredictionView(APIView):
+    """
+    POST /api/attrition/run/
+
+    Triggered manually by the HR Manager.
+    Finds the latest active FeedbackForm, fetches all completed submissions,
+    runs prediction for each employee, saves and returns results.
+
+    Optional body:
+    {
+        "form_id": "abc123"   // if omitted, uses the latest active form
+    }
+    """
+    permission_classes = [IsAuthenticated, IsHRManager]
+
+    def get(self, request, employee_id):
+        # 1. Fetch the user (the 'employee') using the field name 'employee_id'
+        profile = get_object_or_404(employee, employee_id=employee_id)
+
+        # 3. Get the feedback answers
+        answers_qs = FeedbackAnswer.objects.filter(employeeID=profile.employee_id)
+
+        # 4. Run prediction using the PROFILE
+        from .predictor import predict_risk
+        result = predict_risk(profile, answers_qs)
+
+        # 5. Save the result to your AttritionPrediction model
+        from .models import AttritionPrediction
+        AttritionPrediction.objects.create(
+            employeeID=profile.employee_id,
+            riskScore=result['riskScore'],
+            riskLevel=result['riskLevel']
+        )
+
+        return Response(result)
+
+    def post(self, request):
+        # Find the form to use
+        form_id = request.data.get('form_id')
+        if form_id:
+            try:
+                form = FeedbackForm.objects.get(pk=form_id, isActive=True)
+            except FeedbackForm.DoesNotExist:
+                return Response({'error': 'Form not found or inactive.'},
+                                status=status.HTTP_404_NOT_FOUND)
+        else:
+            form = FeedbackForm.objects.filter(isActive=True).order_by('-createdAt').first()
+            if not form:
+                return Response({'error': 'No active feedback forms found.'},
+                                status=status.HTTP_404_NOT_FOUND)
+
+        # Get all completed submissions for this form
+        submissions = FeedbackSubmission.objects.filter(
+            formID=form,
+            status=FeedbackSubmission.STATUS_COMPLETED
+        ).select_related('employeeID').prefetch_related(
+            'answers__questionID'
+        )
+
+        if not submissions.exists():
+            return Response(
+                {'error': f'No completed submissions found for form: {form.title}'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        results      = []
+        errors       = []
+        predictions  = []
+
+        for submission in submissions:
+            employee_user    = submission.employeeID
+            answers_qs  = submission.answers.select_related('questionID').all()
+
+            try:
+                profile = employee_user.predictionusersprofile
+                result = predict_risk(profile, answers_qs)
+
+                # Save prediction to DB
+                prediction = AttritionPrediction.objects.create(
+                    employeeID_id  = profile.employee_id,
+                    riskScore      = result['riskScore'],
+                    riskLevel      = result['riskLevel'],
+                    feedbackFormID = form.formID,
+                )
+                predictions.append(prediction)
+                results.append({
+                    **result,
+                    'predictionID': prediction.predictionID,
+                    'predictedAt':  prediction.predictedAt,
+                })
+
+            except Exception as e:
+                errors.append({
+                    'employeeID': employee_user.employee_id,
+                    'fullName':   employee_user.full_name,
+                    'error':      str(e),
+                })
+
+        return Response({
+            'formID':          form.formID,
+            'formTitle':       form.title,
+            'totalProcessed':  len(results),
+            'totalErrors':     len(errors),
+            'predictions':     results,
+            'errors':          errors,
+        }, status=status.HTTP_200_OK)
+
+
+class AttritionPredictionListView(APIView):
+    """
+    GET /api/attrition/predictions/
+    Returns all predictions, optionally filtered by employee.
+
+    GET /api/attrition/predictions/?employee_id=<id>
+    GET /api/attrition/predictions/?risk_level=High
+    """
+    permission_classes = [IsAuthenticated, IsHRManager]
+
+
+    def get(self, request):
+        qs = AttritionPrediction.objects.select_related('employeeID').all()
+
+        employee_id = request.query_params.get('employee_id')
+        risk_level  = request.query_params.get('risk_level')
+
+        if employee_id:
+            qs = qs.filter(employeeID_id=employee_id)
+        if risk_level:
+            qs = qs.filter(riskLevel=risk_level)
+
+        serializer = AttritionPredictionSerializer(qs, many=True)
+        return Response(serializer.data)
+
+
+class AttritionPredictionLatestView(APIView):
+    """
+    GET /api/attrition/predictions/latest/
+    Returns the most recent prediction for every employee.
+    Useful for the HR dashboard overview.
+    """
+    permission_classes = [IsAuthenticated, IsHRManager]
+    def get(self, request):
+        # Get the latest prediction per employee
+        from django.db.models import Max
+        latest_ids = (
+            AttritionPrediction.objects
+            .values('employeeID')
+            .annotate(latest=Max('predictedAt'))
+            .values('employeeID', 'latest')
+        )
+
+        results = []
+        for entry in latest_ids:
+            pred = AttritionPrediction.objects.select_related('employeeID').get(
+                employeeID_id=entry['employeeID'],
+                predictedAt=entry['latest']
+            )
+            results.append(pred)
+
+        serializer = AttritionPredictionSerializer(results, many=True)
+        return Response(serializer.data)
