@@ -83,12 +83,10 @@ class FeedbackSubmission(models.Model):
     formID       = models.ForeignKey(
                      FeedbackForm, on_delete=models.CASCADE,
                      db_column='formID',
-                     related_name='submissions')
+                     related_name='feedback_submissions')
     employeeID = models.ForeignKey(
                     settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
-                    db_column='employeeID',
-                    to_field='employee_id',
-                    related_name='submissions')
+                    related_name='feedback_submissions')
     
     submittedAt  = models.DateTimeField(null=True, blank=True)
     status       = models.CharField(

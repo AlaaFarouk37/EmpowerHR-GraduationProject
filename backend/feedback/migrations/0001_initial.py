@@ -50,8 +50,8 @@ class Migration(migrations.Migration):
                 ('submissionID', models.CharField(default=feedback.models.gen_id, max_length=50, primary_key=True, serialize=False)),
                 ('submittedAt', models.DateTimeField(blank=True, null=True)),
                 ('status', models.CharField(choices=[('Pending', 'Pending'), ('Completed', 'Completed')], default='Pending', max_length=20)),
-                ('employeeID', models.ForeignKey(db_column='employeeID', on_delete=django.db.models.deletion.CASCADE, related_name='submissions', to=settings.AUTH_USER_MODEL, to_field='employee_id')),
-                ('formID', models.ForeignKey(db_column='formID', on_delete=django.db.models.deletion.CASCADE, related_name='submissions', to='feedback.feedbackform')),
+                ('employeeID', models.ForeignKey(db_column='employeeID', on_delete=django.db.models.deletion.CASCADE, related_name='feedback_submissions', to=settings.AUTH_USER_MODEL, to_field='user_id')),
+                ('formID', models.ForeignKey(db_column='formID', on_delete=django.db.models.deletion.CASCADE, related_name='feedback_submissions', to='feedback.feedbackform')),
             ],
             options={
                 'db_table': 'FeedbackSubmission',

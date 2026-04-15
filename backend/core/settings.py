@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "resume_pipeline",
     "feedback",
     "attrition",
+    "employee_management"
 ]
 
 MIDDLEWARE = [

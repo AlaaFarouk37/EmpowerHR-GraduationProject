@@ -95,6 +95,8 @@ const FormFields = ({ form, field }) => (
 );
 
 // --- MAIN PAGE ---
+// ... (Keep all your Kanban and Form components at the top exactly as they are)
+
 export function HRJobPostingsPage() {
   const toast = useToast();
   const [jobs, setJobs] = useState([]);
@@ -119,35 +121,33 @@ export function HRJobPostingsPage() {
 
   useEffect(() => { load(); }, []);
 
+  // --- ACTIONS ---
   const handleOpenPipeline = async (job) => {
     setSelected(job);
     setShowPipeline(true);
     try {
       const data = await hrGetJobResults(job.id); 
       setCandidates(Array.isArray(data) ? data : []);
-    } catch (err) {
-      toast('Failed to load pipeline', 'error');
-    }
+    } catch (err) { toast('Failed to load pipeline', 'error'); }
+  };
+
+  const handleOpenEdit = (job) => {
+    setSelected(job);
+    setForm({ ...job }); // Pre-fill form with existing job data
+    setShowEdit(true);
   };
 
   const handleCandidateMove = async (candidateId, newStatus) => {
-  // 1. Optimistic Update (makes it stay in place)
-  const previousCandidates = [...candidates];
-  setCandidates(prev => prev.map(c => 
-    c.id === candidateId ? { ...c, status: newStatus } : c
-  ));
-
-  try {
-    // 2. The PATCH call
-    await updateSubmissionStatus(candidateId, newStatus);
-    toast('Moved to ' + newStatus, 'success');
-  } catch (err) {
-    // 3. If it fails (like a 400 error from Django), snap it back
-    console.error("Move failed:", err.response?.data || err.message);
-    setCandidates(previousCandidates);
-    toast('Failed to save: ' + (err.response?.data?.status || 'Server Error'), 'error');
-  }
-};
+    const previousCandidates = [...candidates];
+    setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, status: newStatus } : c));
+    try {
+      await updateSubmissionStatus(candidateId, newStatus);
+      toast('Moved to ' + newStatus, 'success');
+    } catch (err) {
+      setCandidates(previousCandidates);
+      toast('Failed to save move', 'error');
+    }
+  };
 
   const weightsValid = () => {
     const total = +form.weight_skills + +form.weight_experience + +form.weight_education + +form.weight_semantic;
@@ -175,67 +175,50 @@ export function HRJobPostingsPage() {
   return (
     <DndProvider backend={HTML5Backend}>
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 32px' }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24 }}>Manage Job Postings</h1>
+        
         <div style={{ background: 'white', borderRadius: 24, border: '1px solid #EAECF0', overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--gray-50)' }}>
-                {['Title', 'Applicants', 'Status', 'Actions'].map(h => (
+                {['Title', 'Min. Exp', 'Degree', 'Actions'].map(h => (
                   <th key={h} style={{ padding: '14px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {jobs.map((job) => (
-                  <div 
-                    key={job.id} 
-                    style={{ 
-                      background: 'white', 
-                      padding: '24px', 
-                      borderRadius: 20, 
-                      border: '1px solid #EAECF0',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}
-                  >
-                    <div>
-                      <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{job.title}</h3>
-                      <p style={{ color: '#667085', fontSize: 14 }}>{job.company_name || 'Empower HR'}</p>
+                <tr key={job.id} style={{ borderTop: '1px solid #EAECF0' }}>
+                  <td style={{ padding: '20px' }}>
+                    <div style={{ fontWeight: 700 }}>{job.title}</div>
+                    <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>ID: {job.id}</div>
+                  </td>
+                  <td style={{ padding: '20px' }}>{job.min_experience_years} Years</td>
+                  <td style={{ padding: '20px' }}><Badge>{job.required_degree}</Badge></td>
+                  <td style={{ padding: '20px' }}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <Btn size="sm" variant="primary" onClick={() => handleOpenPipeline(job)}>
+                         Pipeline
+                      </Btn>
+                      <Btn size="sm" variant="ghost" onClick={() => handleOpenEdit(job)}>
+                        Edit
+                      </Btn>
                     </div>
-
-                    {/* --- UPDATED BUTTON LOGIC --- */}
-                    <Btn
-                      variant={job.has_applied ? "ghost" : "primary"} // Changes look if applied
-                      disabled={job.has_applied} // Actually prevents the click
-                      onClick={() => handleApply(job.id)}
-                      style={{ 
-                        minWidth: 140,
-                        // Optional: Change cursor to show it's blocked
-                        cursor: job.has_applied ? 'not-allowed' : 'pointer',
-                        opacity: job.has_applied ? 0.7 : 1
-                      }}
-                    >
-                      {job.has_applied ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <CheckCircle size={16} /> Applied
-                        </span>
-                      ) : (
-                        "Apply Now"
-                      )}
-                    </Btn>
-                  </div>
-                ))}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
 
+        {/* --- MODALS --- */}
         <Modal open={showPipeline} onClose={() => setShowPipeline(false)} title={`Pipeline: ${selected?.title}`} maxWidth={1200}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginTop: 20 }}>
             <KanbanColumn title="Pending" status="pending" icon={<Users size={16}/>} bgColor="#F9FAFB" candidates={candidates.filter(c => c.status === 'pending')} onDrop={handleCandidateMove} />
-            <KanbanColumn title="Shortlisted" status="shortlisted" icon={<Star size={16} className="text-blue-500"/>} bgColor="#EFF6FF" candidates={candidates.filter(c => c.status === 'shortlisted')} onDrop={handleCandidateMove} />
-            <KanbanColumn title="In-Progress" status="in-progress" icon={<Clock size={16} className="text-purple-500"/>} bgColor="#F5F3FF" candidates={candidates.filter(c => c.status === 'in-progress')} onDrop={handleCandidateMove} />
-            <KanbanColumn title="Rejected" status="rejected" icon={<XCircle size={16} className="text-red-500"/>} bgColor="#FEF2F2" candidates={candidates.filter(c => c.status === 'rejected')} onDrop={handleCandidateMove} />
-            <KanbanColumn title="Approved" status="approved" icon={<CheckCircle size={16} className="text-emerald-500"/>} bgColor="#ECFDF5" candidates={candidates.filter(c => c.status === 'approved')} onDrop={handleCandidateMove} />
+            <KanbanColumn title="Shortlisted" status="shortlisted" icon={<Star size={16}/>} bgColor="#EFF6FF" candidates={candidates.filter(c => c.status === 'shortlisted')} onDrop={handleCandidateMove} />
+            <KanbanColumn title="In-Progress" status="in-progress" icon={<Clock size={16}/>} bgColor="#F5F3FF" candidates={candidates.filter(c => c.status === 'in-progress')} onDrop={handleCandidateMove} />
+            <KanbanColumn title="Rejected" status="rejected" icon={<XCircle size={16}/>} bgColor="#FEF2F2" candidates={candidates.filter(c => c.status === 'rejected')} onDrop={handleCandidateMove} />
+            <KanbanColumn title="Approved" status="approved" icon={<CheckCircle size={16}/>} bgColor="#ECFDF5" candidates={candidates.filter(c => c.status === 'approved')} onDrop={handleCandidateMove} />
           </div>
         </Modal>
 

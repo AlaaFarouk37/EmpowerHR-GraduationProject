@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { hrGetForms, hrCreateForm, hrUpdateForm, hrDeleteForm, hrActivateForm, hrDeactivateForm, hrAddQuestion, hrDeleteQuestion } from '../../api/index.js';
+import { hrGetForms, hrCreateForm, hrUpdateForm, hrDeleteForm, hrActivateForm, hrDeactivateForm, hrAddQuestion, hrDeleteQuestion, hrGetQuestions } from '../../api/index.js';
 import { Spinner, Modal, Input, Textarea, Btn, Badge, useToast } from '../../components/shared/index.jsx';
 
 const FIELD_TYPES = ['score_1_4', 'boolean', 'decimal'];
@@ -7,7 +7,7 @@ const FIELD_LABELS = { score_1_4: 'Score 1-4', boolean: 'Yes / No', decimal: 'De
 
 export function HRFormsPage() {
   const toast         = useToast();
-  const [forms, setForms]           = useState([]);
+  const [forms, setForms]           = useState([]); 
   const [loading, setLoading]       = useState(true);
   const [selectedForm, setSelected] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -67,7 +67,6 @@ export function HRFormsPage() {
 
 const handleAddQuestion = async () => {
   if (!qData.questionText) return toast('Question text is required', 'error');
-  
   setSaving(true);
   try {
     const payload = {
@@ -76,37 +75,29 @@ const handleAddQuestion = async () => {
       order: parseInt(qData.order) || 0
     };
 
-    const res = await hrAddQuestion(selectedForm.formID, payload);
+    // 'res' here is the new question object directly from your .json() call
+    const newQuestion = await hrAddQuestion(selectedForm.formID, payload);
 
-    // --- SUCCESS UI ---
     toast('Question added successfully');
     setShowAddQ(false); 
     setQData({ questionText: '', fieldType: 'score_1_4', order: 0 });
 
-    // --- DEFENSIVE STATE UPDATE ---
-    // Ensure we have an array to spread, even if the backend sent null/undefined
     const existingQuestions = Array.isArray(selectedForm?.questions) 
       ? selectedForm.questions 
       : [];
 
     const updatedForm = { 
       ...selectedForm, 
-      questions: [...existingQuestions, res] 
+      questions: [...existingQuestions, newQuestion] // Use newQuestion directly
     };
 
     setSelected(updatedForm);
 
-    if (typeof setForms === 'function') {
-      setForms(prev => {
-        if (!Array.isArray(prev)) return prev;
-        return prev.map(f => f.formID === selectedForm.formID ? updatedForm : f);
-      });
-    }
+    // Sidebar sync
+    setForms(prev => prev.map(f => f.formID === selectedForm.formID ? updatedForm : f));
 
   } catch (err) {
-    console.error("Submission Error:", err);
-    const errorDetail = err.response?.data?.detail || 'Failed to add question';
-    toast(errorDetail, 'error');
+    toast('Failed to add question', 'error');
   } finally {
     setSaving(false);
   }
@@ -157,12 +148,31 @@ const handleAddQuestion = async () => {
     if (!window.confirm('Delete this question?')) return;
     await hrDeleteQuestion(q.questionID);
     toast('Question deleted');
-    const updated = await hrGetForms();
-    setForms(Array.isArray(updated) ? updated : []);
-    const fresh = updated.find(f => f.formID === selectedForm.formID);
-    if (fresh) setSelected(fresh);
+    await load(); 
+  
+  // Refresh the questions area using your new fetcher
+    if (selectedForm) {
+      handleSelectForm(selectedForm); 
+    }
   };
 
+const handleSelectForm = async (form) => {
+  setSelected(form);
+  try {
+    console.log("Fetching for ID:", form.formID);
+    
+    // With your fetch wrapper, 'res' is already the JSON array
+    const questionsArray = await hrGetQuestions(form.formID);
+    
+    console.log("Fetched questions:", questionsArray);
+    
+    // Spread the form and attach the questions directly
+    setSelected({ ...form, questions: questionsArray });
+  } catch (err) {
+    console.error("Fetch failed:", err);
+    toast('Failed to load questions', 'error');
+  }
+};
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 32px 80px' }}>
       {/* Header */}
@@ -191,7 +201,7 @@ const handleAddQuestion = async () => {
             )}
             {forms.map(form => (
               <div key={form.formID}
-                onClick={() => setSelected(form)}
+                onClick={() => handleSelectForm(form)}
                 style={{
                   background: 'var(--white)', borderRadius: 20, padding: '20px 22px',
                   border: `2px solid ${selectedForm?.formID === form.formID ? 'var(--red)' : '#EAECF0'}`,
@@ -239,7 +249,7 @@ const handleAddQuestion = async () => {
                 </Btn>
               </div>
               <div style={{ padding: '16px 28px 28px' }}>
-                {(!selectedForm.questions || selectedForm.questions.length === 0) ? (
+                {(!Array.isArray(selectedForm?.questions) || selectedForm.questions.length === 0) ? (
                   <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--gray-300)', fontSize: 13 }}>
                     No questions yet. Add your first question.
                   </div>
